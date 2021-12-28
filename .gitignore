@@ -1,7 +1,7 @@
 outputs
 inputs
 env/
-.egg-info/
+*.egg-info/
 .vscode/
 .idea/
 *.pyc

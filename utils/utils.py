@@ -170,7 +170,7 @@ def calc_receptive_field(filter_size, dilation_factors, Fs=None):
         return (filter_size * dilation_factors[0] + sum(dilation_factors[1:]) * (filter_size - 1)) / Fs * 1e3
 
 
-def resample_sig(params, input_signal, orig_fs=None, target_fs=None, scale=None, allow_aliasing=False):
+def resample_sig(params, input_signal, orig_fs=None, target_fs=None):
     if not hasattr(params, 'resamplers') or type(params.resamplers) == str:
         params.resamplers = {}
     if (orig_fs, target_fs) in params.resamplers.keys() and params.resamplers[(orig_fs, target_fs)].in_shape[2] == \
@@ -206,7 +206,7 @@ def get_input_signal(params:object):
                                            offset=params.segments_to_train[idx],
                                            duration=params.segments_to_train[idx + 1] - params.segments_to_train[idx])
             else:
-                _samples, _ = librosa.load(params.input_path, sr=None,
+                _samples, _ = librosa.load(os.path.join('inputs', params.input_path), sr=None,
                                            offset=params.segments_to_train[idx],
                                            duration=params.segments_to_train[idx + 1] - params.segments_to_train[
                                                idx])
