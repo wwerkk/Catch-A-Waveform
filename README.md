@@ -2,7 +2,11 @@
 
 [Project Website](https://galgreshler.github.io/Catch-A-Waveform/) | [Paper](https://arxiv.org/pdf/2106.06426.pdf)
 
-### Official pytorch implementation of the paper: "Catch-A-Waveform: Learning to Generate Audio from a Single Short Example" (NeurIPS 2021)
+### Modified: "Catch-A-Waveform: Learning to Generate Audio from a Single Short Example" (NeurIPS 2021)
+- new training run modes (`resume`, `transfer`)
+- new audio sampling method `--scale_crop` to fit the maximum audio into memory at each scale
+- skip connections through summed residual layers in the dialated conv stack
+- new params for complex music (more scales)
 
 ## Generate audio from a single audio input
 
