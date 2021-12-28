@@ -1,4 +1,5 @@
 from torch import optim
+import bitsandbytes as bnb
 from utils.utils import *
 from utils.mss_loss import multi_scale_spectrogram_loss
 from models import CAW
@@ -14,20 +15,37 @@ def train(params, signals_list):
         torch.manual_seed(params.manual_random_seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-
-    fs_list = params.fs_list
+    
     n_scales = len(params.scales)
-    generators_list = []
-    noise_amp_list = []
+    print(n_scales, params.scales)
+    if params.run_mode == 'resume' or params.run_mode == 'transfer':
+        generators_list = generators_list_from_folder(params)
+        print(len(generators_list), 'generators')
+    else:
+        generators_list = []
+    if params.run_mode == 'resume':   
+        reconstruction_noise_list = torch.load((os.path.join(params.output_folder, 'reconstruction_noise_list.pt')),
+                                                   map_location=params.device)
+        ###TODO create a function to create reconstruction noise for the correct n_sample size when draw_signal is called with it
+        print('loaded reconstruction noise list:', [r.shape for r in reconstruction_noise_list])
+        noise_amp_list = params.noise_amp_list 
+        fs_list = params.fs_list
+        print('noise amp list', noise_amp_list)
+        n_trained = len(generators_list)
+        print('resuming from last saved point', n_trained, 'are trained out of', len(fs_list))
+    else:
+        n_trained = 0
+        fs_list = params.fs_list
+        noise_amp_list = []
+        reconstruction_noise_list = []
     if params.run_mode == 'inpainting':
         energy_list = [(sig[mask] ** 2).mean().item() for sig, mask in zip(signals_list, params.masks)]
     else:
         energy_list = [(sig ** 2).mean().item() for sig in signals_list]
-    reconstruction_noise_list = []
     output_signals = []
     loss_vectors = []
 
-    for scale_idx in range(n_scales):
+    for scale_idx in range(n_trained, n_scales):
         output_signals_single_scale, loss_vectors_single_scale, netG, reconstruction_noise_list, noise_amp = train_single_scale(
             params,
             signals_list,
@@ -63,8 +81,12 @@ def train_single_scale(params, signals_list, fs_list, generators_list, noise_amp
                        reconstruction_noise_list):
     # Terminology: 0 is the higher scale (original signal, no downsampling). Higher scale means larger downsampling, e.g shorter signals
     n_scales = len(params.scales)
-    current_scale = n_scales - len(generators_list) - 1
+    if params.run_mode == 'transfer':
+        current_scale = n_scales - len(noise_amp_list) - 1
+    else:
+        current_scale = n_scales - len(generators_list) - 1
     scale_idx = n_scales - current_scale - 1
+    print(scale_idx, 'scale idx', current_scale, 'current scale')
     input_signal = signals_list[scale_idx].to(params.device)
     params.current_fs = fs_list[scale_idx]
     N = len(input_signal)
@@ -78,7 +100,6 @@ def train_single_scale(params, signals_list, fs_list, generators_list, noise_amp
 
     # Create inputs
     real_signal = input_signal.reshape(1, 1, N)
-
     params.hidden_channels = params.hidden_channels_init if scale_idx == 0 else int(
         params.hidden_channels_init * params.growing_hidden_channels_factor)
 
@@ -118,31 +139,53 @@ def train_single_scale(params, signals_list, fs_list, generators_list, noise_amp
             torch.load('%s/netDScale%d.pth' % (params.output_folder, scale_idx - 1), map_location=params.device))
 
     output_folder = params.output_folder
-
+    #
+    params.scheduler_milestones = [int(params.num_epochs * 2 / 3)]
     # Create optimizers
-    optimizerD = optim.Adam(netD.parameters(), lr=params.learning_rate, betas=(params.beta1, 0.999))
-    optimizerG = optim.Adam(netG.parameters(), lr=params.learning_rate, betas=(params.beta1, 0.999))
+    if params.lite: # add bnb optimizer
+        optimizerD = bnb.optim.Adam8bit(netD.parameters(), lr=params.learning_rate, betas=(params.beta1, 0.999)) 
+        optimizerG = bnb.optim.Adam8bit(netG.parameters(), lr=params.learning_rate, betas=(params.beta1, 0.999))
+    else:
+        optimizerD = optim.Adam(netD.parameters(), lr=params.learning_rate, betas=(params.beta1, 0.999))
+        optimizerG = optim.Adam(netG.parameters(), lr=params.learning_rate, betas=(params.beta1, 0.999))
     schedulerD = torch.optim.lr_scheduler.MultiStepLR(optimizer=optimizerD, milestones=params.scheduler_milestones,
                                                       gamma=params.scheduler_lr_decay)
     schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizer=optimizerG, milestones=params.scheduler_milestones,
                                                       gamma=params.scheduler_lr_decay)
 
     # Initialize error vectors
-    v_err_real = np.zeros(params.num_epoches, )
-    v_err_fake = np.zeros(params.num_epoches, )
-    v_gp = np.zeros(params.num_epoches, )
-    v_rec_loss = np.zeros(params.num_epoches, )
+    if params.scale_crop and params.run_mode == 'transfer':
+        num_epochs = int(params.num_epochs * (params.scales[scale_num]))
+        print(f'adapting at scale {scale_idx} for {num_epochs}')
+    elif params.scale_crop and params.run_mode == 'normal':
+        num_epochs = int(params.num_epochs)
+    else:
+        if scale_idx > 0:
+            num_epochs = int(params.num_epochs)
+        else:
+            num_epochs = int(params.num_epochs)
+
+    v_err_real = np.zeros(num_epochs, )
+    v_err_fake = np.zeros(num_epochs, )
+    v_gp = np.zeros(num_epochs, )
+    v_rec_loss = np.zeros(num_epochs, )
 
     epoches_start_time = time.time()
     # prepare inputs for gradient penalty
     if not params.run_mode == 'inpainting':
         D_out_shape = torch.Size((1, 1, N - 2 * pad_size))
         _grad_outputs = torch.ones(D_out_shape, device=params.device)
-    grad_pen_alpha_vec = torch.rand(params.num_epoches).to(params.device)
+    grad_pen_alpha_vec = torch.rand(num_epochs).to(params.device)
 
     inputs_lengths = params.inputs_lengths
-    for epoch_num in range(params.num_epoches):
-        print_progress = epoch_num % 100 == 0
+    for epoch_num in range(num_epochs):
+        #TODO add batch processing for whole file here:
+        # for i in data_loader:
+        if params.run_mode == 'transfer':
+            pmod = 50
+        else:
+            pmod = 100
+        print_progress = epoch_num % pmod == 0
         # Create noise
         noise_signal = get_noise(params, real_signal.shape)
         noise_signal = signal_padder(noise_signal)
@@ -180,7 +223,7 @@ def train_single_scale(params, signals_list, fs_list, generators_list, noise_amp
             else:
                 prev_signal = draw_signal(params, generators_list, inputs_lengths, fs_list, noise_amp_list)
                 prev_signal = signal_padder(prev_signal)
-                prev_reconstructed_signal = draw_signal(params, generators_list, params.inputs_lengths,
+                prev_reconstructed_signal = draw_signal(params, generators_list, inputs_lengths,
                                                         fs_list,
                                                         noise_amp_list,
                                                         reconstruction_noise_list)
@@ -276,7 +319,7 @@ def train_single_scale(params, signals_list, fs_list, generators_list, noise_amp
 
         if print_progress:
             print('[%d/%d] D(real): %.2f. D(fake): %.2f. rec_loss: %.4f. gp: %.4f ' % (
-                epoch_num, params.num_epoches, -err_real_D_val, err_fake_D_val, rec_loss_val, gradient_penalty_val))
+                epoch_num, num_epochs, -err_real_D_val, err_fake_D_val, rec_loss_val, gradient_penalty_val))
 
         schedulerD.step()
         schedulerG.step()
@@ -284,7 +327,7 @@ def train_single_scale(params, signals_list, fs_list, generators_list, noise_amp
         # Some memory cleanup
         fake_signal = fake_signal.detach()
         reconstructed_signal = reconstructed_signal.detach()
-        if epoch_num < params.num_epoches - 1:
+        if epoch_num < num_epochs - 1:
             del fake_signal, reconstructed_signal, rec_loss, rec_loss_t, rec_loss_f
         del noise_signal, input_noise
         if scale_idx > 0:
@@ -293,7 +336,7 @@ def train_single_scale(params, signals_list, fs_list, generators_list, noise_amp
     epoches_stop_time = time.time()
     runtime_msg = 'Total time in scale %d: %d[sec] (%.2f[sec]/epoch on avg.). D(real): %f, D(fake): %f, rec_loss: %.4f. gp: %.4f' % (
         current_scale, epoches_stop_time - epoches_start_time,
-        (epoches_stop_time - epoches_start_time) / params.num_epoches,
+        (epoches_stop_time - epoches_start_time) / num_epochs,
         -err_real_D_val, err_fake_D_val, rec_loss_val, gradient_penalty_val)
     print(runtime_msg)
     with open(os.path.join(output_folder, 'log.txt'), 'a') as f:

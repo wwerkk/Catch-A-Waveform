@@ -17,23 +17,38 @@ if __name__ == '__main__':
     parser.add_argument('--max_length', help='Max length of signal, in [sec]', default=25, type=float)
     parser.add_argument('--segments_to_train', default=[], type=float, nargs='+',
                         help='Train on several segments of input signal, please provide segements in the form: start1, end1, start2, end2,... in [sec]')
-    parser.add_argument('--init_sample_rate', help='Resample input to a given sample rate', default=16000, type=int)
-    parser.add_argument('--num_epoches', help='Number of training epoches in each scale', default=2000, type=int)
+    parser.add_argument('--init_sample_rate', help='Resample input to a given sample rate', default=40000, type=int)
+    parser.add_argument('--num_epochs', help='Number of training epoches in each scale', default=4000, type=int)
     parser.add_argument('--num_layers', help='Number of layers in each model', default=8, type=int)
     parser.add_argument('--speech', default=False, action='store_true')
-    parser.add_argument('--run_mode', default='normal', type=str, choices=['normal', 'inpainting', 'denoising'])
+    parser.add_argument('--run_mode', default='normal', type=str, choices=['normal', 'inpainting', 'denoising', 'resume', 'transfer'])
     parser.add_argument('--inpainting_indices', default=[0, 1], nargs=2, type=int,
                         help='Start and end indices of hole (for inpainting)')
-    parser.add_argument('--plot_losses', help='Save and plot GAN losses', default=False, action='store_true')
+    parser.add_argument('--plot_losses', help='Save and plot GAN losses', default=True, action='store_true')
     parser.add_argument('--plot_signals', help='Plot signals', default=False, action='store_true')
-
-    params_override = parser.parse_args()
+    parser.add_argument('--output_folder', help='output directory with models and signals', type=str)
+    parser.add_argument('--scale_crop', help='crop the signal to use a fixed frame at each scale - used for fitting high sample rates in memory', default=False, action='store_true')
+    parser.add_argument('--lite', help='use a precision reduced version of adam optimizers to reduce the memory load of back prop', default=False, action='store_true')
+    parser.add_argument('--skip_connections', help='flag to add residual connections between conv blocks', default=False, action='store_true')
+    params_parsed = parser.parse_args()
+    if params_parsed.run_mode == 'resume' or params_parsed.run_mode == 'transfer':
+        params_parsed.output_folder = os.path.join('outputs', params_parsed.output_folder) 
 
 startTime = time.time()
 params = Params()
-params = override_params(params, params_override)
+if params_parsed.run_mode == "resume" or params_parsed.run_mode == 'transfer':
+    log_file = os.path.join(params_parsed.output_folder,'log.txt')
+    if os.path.exists(log_file):
+        print(f"Warning: the '{params_parsed.run_mode}' --run_mode will overwrite parameters with those found in log.txt")
+        params_logged = params_from_log(log_file)
+        params = override_params(params, params_logged)
+    else:
+        print(f'Warning: unable to load params from previous training run. {log_file} does not exist')
 
-
+params = override_params(params, params_parsed)
+params.Fs = params.init_sample_rate
+if params.run_mode == 'transfer':
+    params.learning_rate == 0.000015
 if params.is_cuda:
     torch.cuda.set_device(params.gpu_num)
     params.device = torch.device("cuda:%d" % params.gpu_num)
@@ -60,13 +75,13 @@ if params.run_mode == 'inpainting':
     samples[params.inpainting_indices[0]:params.inpainting_indices[1]] = 0
 
 # Set params by run_node and signal type
-params.scheduler_milestones = [int(params.num_epoches * 2 / 3)]
+params.scheduler_milestones = [int(params.num_epochs * 2 / 3)]
 if params.speech:
     params.alpha1 = 10
     params.alpha2 = 0
     params.add_cond_noise = False
 else:
-    if params.run_mode == 'normal':
+    if params.run_mode == 'normal' or params.run_mode == 'resume' or params.run_mode == 'transfer':
         params.alpha1 = 0
         params.alpha2 = 1e-4
         params.add_cond_noise = True
@@ -78,16 +93,16 @@ else:
         else:
             params.add_cond_noise = False
 params.dilation_factors = [2 ** i for i in range(params.num_layers)]
+if params.run_mode == 'normal' or params.run_mode == 'inpainting' or params.run_mode == 'denoising':
+    # Create output folder
+    if not os.path.exists('outputs'):
+        os.mkdir('outputs')
 
-# Create output folder
-if not os.path.exists('outputs'):
-    os.mkdir('outputs')
-
-if os.path.exists(params.output_folder):
-    dirs = glob.glob(params.output_folder + '*')
-    params.output_folder = params.output_folder + '_' + str(len(dirs) + 1)
-os.mkdir(params.output_folder)
-print('Writing results to %s\n' % params.output_folder)
+    if os.path.exists(params.output_folder):
+        dirs = glob.glob(params.output_folder + '*')
+        params.output_folder = params.output_folder + '_' + str(len(dirs) + 1)
+    os.mkdir(params.output_folder)
+    print('Writing results to %s\n' % params.output_folder)
 
 if params.run_mode == 'inpainting':
     write_signal(os.path.join(params.output_folder, 'Original.wav'), samples_orig, params.Fs)
@@ -95,7 +110,9 @@ if params.run_mode == 'inpainting':
 # samples = samples.reshape((1, -1))
 
 # Create input signal for each scale
+###TODO allow to continue with new signal sizes in failed layers
 signals_list, fs_list = create_input_signals(params, torch.tensor(samples), params.Fs)
+print(fs_list,'== fs_list\n', len(signals_list), '== len signals list')
 if len(signals_list) == 0:
     params.set_first_scale_by_energy = False
     params.scales = params.scales[2:]  # Manually start from 500
@@ -119,7 +136,7 @@ if params.run_mode == 'inpainting':
         params.masks.append(torch.Tensor(current_mask).bool().to(params.device))
 
 print('Running on ' + str(params.device))
-
+print(params.scales, 'scales')
 # Start training
 output_signals, loss_vectors, generators_list, noise_amp_list, energy_list, reconstruction_noise_list = train(
     params, signals_list)

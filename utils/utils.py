@@ -101,13 +101,24 @@ def calc_gradient_penalty(params, netD, real_data, fake_data, LAMBDA, alpha=None
     return gradient_penalty
 
 
-def create_input_signals(params, input_signal, Fs):
-    # Performs downscaling for desired scales and outputs list of signals
+def create_input_signals(params:object, input_signal:np.ndarray, Fs:int):
+    """ Performs downscaling for desired scales and outputs list of signals
+    args
+        params: argparsed hyperparameter object
+        input_signal: unnormalized raw audio signal to write
+        Fs: sample rate of the input signal
+    return:
+        list of numpy array audio signals
+        list int of sample rates
+    """
     signals_list = []
     fs_list = []
     n_scales = len(params.scales)
     set_first_scale = False
     rf = calc_receptive_field(params.filter_size, params.dilation_factors)
+    if params.scale_crop == True:
+        crop_length = int(params.max_length * params.fs_list[0])
+        print('--scale_crop length:', params.max_length, '*', params.fs_list[0], '=', crop_length)
     for k in range(n_scales):
         downsample = params.scales[k]
         fs = int(Fs / downsample)
@@ -115,6 +126,11 @@ def create_input_signals(params, input_signal, Fs):
             coarse_sig = input_signal
         else:
             coarse_sig = torch.Tensor(librosa.resample(input_signal.squeeze().numpy(), Fs, fs))
+        if params.scale_crop == True:
+            print(downsample, coarse_sig.shape[-1], 'min:', min([crop_length, coarse_sig.shape[-1]]), int((min([crop_length, coarse_sig.shape[-1]])/coarse_sig.shape[-1])*100),'%')
+            #crop_length = int(coarse_sig.shape[0] / params.scales[-k-1])
+            #print(n_scales-params.scales[n_scales-k-1], downsample, coarse_sig.shape[-1], '->', crop_length)
+            coarse_sig = coarse_sig[:min([crop_length, coarse_sig.shape[-1]])]
         if params.run_mode == 'inpainting':
             if (params.inpainting_indices[1] - params.inpainting_indices[0]) / params.Fs * fs > len(
                     coarse_sig) - 2 * rf:
@@ -170,11 +186,12 @@ def resample_sig(params, input_signal, orig_fs=None, target_fs=None, scale=None,
     return new_sig
 
 
-def get_input_signal(params):
+def get_input_signal(params:object):
+    """ get a normalized training signal using list of files and segments
+    """
     file_name = params.input_file.split('.')
     if len(file_name) < 2:
         params.input_file = '.'.join([params.input_file, 'wav'])
-    output_folder = file_name[0].replace(' ', '_')
     if len(params.segments_to_train) == 0:
         samples, Fs = librosa.load(os.path.join('inputs', params.input_file), sr=None,
                                    offset=params.start_time, duration=2 * params.max_length)
@@ -198,9 +215,9 @@ def get_input_signal(params):
     if samples.shape[0] / Fs > params.max_length:
         n_samples = int(params.max_length * Fs)
         samples = samples[:n_samples]
-
-    params.output_folder = output_folder
-    params.output_folder = os.path.join('outputs', params.output_folder)
+    if params.run_mode == 'normal' or params.run_mode == 'inpainting' or params.run_mode == 'denoising':
+        params.output_folder = file_name[0].replace(' ', '_')
+        params.output_folder = os.path.join('outputs', params.output_folder)
     params.Fs = Fs
     if params.init_sample_rate < Fs:
         hr_samples = samples.copy()
@@ -211,29 +228,72 @@ def get_input_signal(params):
     return samples
 
 
-def draw_signal(params, generators_list, signals_lengths_list, fs_list, noise_amp_list, reconstruction_noise_list=None,
-                condition=None, output_all_scales=False):
+def draw_signal(params:object, generators_list:list, signals_lengths_list:list, fs_list:list, noise_amp_list:list, reconstruction_noise_list:list=None,
+                condition:list=None, output_all_scales:bool=False, channels:int=1):
     # Draws a signal up to current scale, using learned generators
+    if params.run_mode == 'resume':
+        #print(len(noise_amp_list), len(generators_list), signals_lengths_list)
+        if reconstruction_noise_list:
+            if len(reconstruction_noise_list) > len(signals_lengths_list):
+                # auto-drop reconstruction noise for missing scales
+                reconstruction_noise_list = reconstruction_noise_list[:len(signals_lengths_list)]
+            assert len(reconstruction_noise_list) <= len(signals_lengths_list)
+            '''
+            to manually fix the assert error above
+            edit reconstruction_noise_list.pt by removing unneeded tensors
+            which might have been added in previous resume runs to the .pt file
+            '''
+        assert not len(noise_amp_list) > len(generators_list)
+        '''
+        to manually fix the assert error above
+        delete netDscale*.pth and netGscale*.pth for failed models from the output folder
+        or edit the values of noise_amp_list from log.txt to match the number of scales you have trained
+        TODO make a better warning messages when this assert error is hit
+        '''
+        assert len(fs_list) == len(params.fs_list)
+        '''
+        this assert error might happen if the number if the fs list for all the scales changes between resume runs
+        '''
     pad_size = calc_pad_size(params)
-    if output_all_scales:
-        signals_all_scales = []
     for scale_idx, (netG, noise_amp) in enumerate(zip(generators_list, noise_amp_list)):
         signal_padder = nn.ConstantPad1d(pad_size, 0)
         if condition is None:
             n_samples = signals_lengths_list[scale_idx]
             if reconstruction_noise_list is not None:
                 noise_signal = reconstruction_noise_list[scale_idx]
+                #print('\tnoise_sig: use reconstruction noise list selected by scale idx')
+                if params.run_mode == 'resume':
+                    #if scale_idx == 0:
+                    #    print('\tno prevsig attempting to create a new noise signal from signals length list')
+                    #    noise_length = noise_signal.shape[-1]
+                    #elif noise_signal.shape == prev_sig.shape:
+                    #    print('\t_OG noise signal', noise_signal.shape, prev_sig.shape)
+                    #    print('reconstruction matches previous signal length from list')
+                    #    noise_length = noise_signal.shape[-1]
+                    #elif noise_signal.shape > prev_sig.shape:
+                    #    print('\tcrop the previous reconstructiom noise layer')
+                    #    noise_length = noise_signal.shape[-1]
+                    #    prev_sig = prev_sig[:,:,:noise_length]
+                    #else:
+                    #    print('\tattempting to synthesize a new noise signal from signals length list')
+                    noise_length = signal_padder(get_noise(params, (1, 1, n_samples))).shape[-1]
+                    noise_signal = noise_signal[:,:,:noise_length]
+                    print('\t_cropped noise signal', n_samples, noise_length, noise_signal.shape)
             else:
+                #print('\tnoise_sig: generate the noise based on random amplitude scaled samples')
                 noise_signal = get_noise(params, (1, 1, n_samples))
                 noise_signal = noise_signal * noise_amp
 
             if scale_idx == 0:
+                #print('\tprev_sig: the lowest resolution scale index uses the noise signal shape to generate', noise_signal.shape)
                 prev_sig = torch.full(noise_signal.shape, 0, device=params.device, dtype=noise_signal.dtype)
             else:
+                #print('\tprev_sig: not the first scale index so use the prev')
                 prev_sig = signal_padder(prev_sig)
 
             # pad noise with zeros, to match signal after filtering
             if reconstruction_noise_list is None:
+                #print('\tpad noise with zeros')
                 # reconstruction_noise is already padded
                 noise_signal = signal_padder(noise_signal)
                 if scale_idx == 0:
@@ -250,14 +310,25 @@ def draw_signal(params, generators_list, signals_lengths_list, fs_list, noise_am
             prev_sig = signal_padder(prev_sig)
 
         # Generate this scale signal
-        cur_sig = netG((noise_signal + prev_sig).detach(), prev_sig)
-
-        if output_all_scales:
-            signals_all_scales.append(torch.squeeze(cur_sig).detach().cpu().numpy())
+        if noise_signal.shape != prev_sig.shape:
+            print(scale_idx, fs_list[scale_idx], noise_signal.shape, prev_sig.shape, n_samples)
+        cur_sigs = [[]] * channels
+        if channels > 1:
+            for sample in range(noise_signal.shape[-1]):
+                for channel in range(channels):
+                    if channel == 0:
+                        #cur_sigs[0] = netG((noise_signal + prev_sig).detach(), prev_sig)
+                        #todo finish
+                        print('Error: code not complete for multi channel')
+        elif channels == 1:
+            cur_sigs[0] = netG((noise_signal + prev_sig).detach(), prev_sig)
+        else:
+            raise ValueError('channels must be >= 1')
+            
 
         # Upsample for next scale
         if scale_idx < len(fs_list) - 1:
-            up_sig = resample_sig(params, cur_sig, orig_fs=fs_list[scale_idx], target_fs=fs_list[scale_idx + 1])
+            up_sig = resample_sig(params, cur_sigs[0], orig_fs=fs_list[scale_idx], target_fs=fs_list[scale_idx + 1])
             if up_sig.shape[2] > signals_lengths_list[scale_idx + 1]:
                 assert abs(
                     up_sig.shape[2] > signals_lengths_list[scale_idx + 1]) < 20, 'Should not happen, check this!'
@@ -269,13 +340,17 @@ def draw_signal(params, generators_list, signals_lengths_list, fs_list, noise_am
                     (up_sig, up_sig.new_zeros(1, 1, signals_lengths_list[scale_idx + 1] - up_sig.shape[2])),
                     dim=2)
         else:
-            up_sig = cur_sig
+            up_sig = cur_sigs[0]
         prev_sig = up_sig
         prev_sig = prev_sig.detach()
 
-        del up_sig, cur_sig, noise_signal, netG
+        del up_sig, cur_sigs, noise_signal, netG
 
     if output_all_scales:
+        #TODO finish logic for 2 model generation
+        signals_all_scales = [[]] * channels
+        for channel in range(channels):
+            signals_all_scales[channel](torch.squeeze(cur_sigs[channel]).detach().cpu().numpy())
         return signals_all_scales
     else:
         return prev_sig
@@ -301,7 +376,7 @@ def cast_general(x):
                 return x
 
 
-def params_from_log(path, gpu_num=0):
+def params_from_log(path:str, gpu_num:int=0):
     fId = open(path, 'r')
     line = fId.readline()
     params = Params()
@@ -336,7 +411,8 @@ def params_from_log(path, gpu_num=0):
         params.device = torch.device("cuda:%d" % gpu_num)
     else:
         params.device = torch.device("cpu")
-    params.noise_amp_list = noise_amp_list_from_log(path)
+    if params.run_mode == 'normal' or params.run_mode == 'inpainting' or params.run_mode == 'denoising':
+        params.noise_amp_list = noise_amp_list_from_log(path)
     try:
         params.dilation_factors = [int(i) for i in params.dilation_factors]
     except:
@@ -346,26 +422,28 @@ def params_from_log(path, gpu_num=0):
     return params
 
 
-def noise_amp_list_from_log(path):
+def noise_amp_list_from_log(path:str):
     fId = open(path, 'r')
     line = fId.readline()
     noise_amp_list = []
     while line:
         if line.startswith('noise_amp') and not line.startswith('noise_amp_factor'):
-            args = line.split()
-            noise_amp_list.append(float(args[1]))
+            args = line.replace('=','').replace('[','').replace(']','').replace(',','').split()
+            for arg in args[1:]:
+                noise_amp_list.append(float(arg))
         line = fId.readline()
     fId.close()
+    print('noise amp list from log', noise_amp_list)
     return noise_amp_list
 
 
-def override_params(params, params_override):
+def override_params(params:object, params_override:object):
     for key in vars(params_override):
         setattr(params, key, getattr(params_override, key))
     return params
 
 
-def generators_list_from_folder(params):
+def generators_list_from_folder(params:object):
     generators_list = []
     n_generators = len(params.scales)
     for scale_idx in range(n_generators):
@@ -385,7 +463,7 @@ def generators_list_from_folder(params):
     return generators_list
 
 
-def write_signal(path, signal, fs, overwrite=False, subtype='PCM_16'):
+def write_signal(path:str, signal:np.ndarray, fs:np.ndarray, overwrite:bool=False, subtype:str='PCM_16'):
     if signal is None:
         return
     if torch.is_tensor(signal):
@@ -402,7 +480,17 @@ def write_signal(path, signal, fs, overwrite=False, subtype='PCM_16'):
     sf.write(path, signal, fs, subtype=subtype)
 
 
-def time_freq_stitch_by_fft(low_signal, high_signal, low_Fs, high_Fs, filt_file=None):
+def time_freq_stitch_by_fft(low_signal:np.ndarray, high_signal:np.ndarray, low_Fs:int, high_Fs:int, filt_file:str=None) -> np.ndarray:
+    """ concatenate two signals (low/high) in the spectral domain
+    args:
+        low_signal: low resolution audio signal
+        high_signal: high resolution audio signal
+        low_Fs: low signal frame rate
+        high_Fs: high signal sample rate
+        filt_file: optional path to file for filtering
+    returns:
+        a new signal or the original if there is a shape mismatch
+    """
     factor = int(high_Fs / low_Fs)
     nFFT = len(high_signal)
     nFFT_low = len(low_signal)
@@ -421,7 +509,7 @@ def time_freq_stitch_by_fft(low_signal, high_signal, low_Fs, high_Fs, filt_file=
     else:
         H = 1 / factor
 
-    padded_low = np.zeros(len(low_signal) * int(high_Fs / low_Fs))
+    padded_low = np.zeros(len(low_signal) * factor)
     padded_low[::factor] = low_signal
     high_fft = fft(high_signal)
     # low_fft = fft(padded_low) * factor
@@ -443,5 +531,5 @@ def time_freq_stitch_by_fft(low_signal, high_signal, low_Fs, high_Fs, filt_file=
     out = np.real(ifft(out_fft))
     if nFFT_orig != nFFT:
         out = out[:nFFT_orig]
-        print('Dimentions mismatch!')
+        print('Dimension mismatch: nFFT_orig != nFFT', len(nFFT_orig), len(nFFT))
     return out
