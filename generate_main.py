@@ -13,14 +13,22 @@ if __name__ == '__main__':
     parser.add_argument('--condition',
                         help='Condition the generated signals on the lowest scale of input, to enforce general structure',
                         default=False, action='store_true')
-
+    parser.add_argument('--condition_file', help='file to use to condition the generation of the selected model', type=str, default=None)
     args = parser.parse_args()
 
     audio_generator = AudioGenerator(os.path.join('outputs', args.input_folder))
-    if args.condition:
-        condition_signal, condition_fs = librosa.load(
-            os.path.join(audio_generator.output_folder, 'real@%dHz.wav' % audio_generator.params.fs_list[0]), sr=None)
-        condition = {'condition_signal': condition_signal, 'name': 'self', 'condition_fs': condition_fs}
+    if args.condition or args.condition_file:
+        if args.condition_file:
+            print('conditioning with custom file', args.condition_file + '.wav')
+            condition_signal, condition_fs = librosa.load(
+                os.path.join('inputs/', args.condition_file + '.wav'), sr=audio_generator.params.fs_list[0],  duration=args.length)
+            norm_factor = max(abs(condition_signal.reshape(-1)))
+            print(norm_factor, 'norm factor')
+            condition_signal = condition_signal / norm_factor
+        else:
+            condition_signal, condition_fs = librosa.load(
+                os.path.join(audio_generator.output_folder, 'real@%dHz.wav' % audio_generator.params.fs_list[0]), sr=None)
+        condition = {'condition_signal': condition_signal, 'name': args.condition_file, 'condition_fs': condition_fs}
         audio_generator.condition(condition)
     else:
         audio_generator.generate(nSignals=args.n_signals, length=args.length,

@@ -1,4 +1,8 @@
 outputs
+inputs
+env/
+.egg-info/
+.vscode/
 .idea/
 *.pyc
 __pycache__

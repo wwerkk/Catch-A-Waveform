@@ -18,6 +18,9 @@ class AudioGenerator(object):
             generators_list = generators_list_from_folder(params)
         else:
             output_folder = params.output_folder
+        if params.run_mode == 'transfer':
+            print(f' reconstruction noise list has {len(reconstruction_noise_list)} items')
+            print(f' noise amp list has {len(noise_amp_list)} items')
         self.generators_list = generators_list
         self.noise_amp_list = noise_amp_list
         self.params = params
@@ -26,24 +29,27 @@ class AudioGenerator(object):
         if not os.path.exists(os.path.join(output_folder, 'GeneratedSignals')):
             os.mkdir(os.path.join(output_folder, 'GeneratedSignals'))
 
-    def generate(self, nSignals=1, length=20, generate_all_scales=False):
+    def generate(self, nSignals:int=1, length:int=20, generate_all_scales:bool=False, channels:int=1):
         for sig_idx in range(nSignals):
             # Draws a signal up to current scale, using learned generators
             output_signals_list = draw_signal(self.params, self.generators_list,
                                               [round(f * length) for f in self.params.fs_list], self.params.fs_list,
-                                              self.noise_amp_list, output_all_scales=generate_all_scales)
+                                              self.noise_amp_list, output_all_scales=generate_all_scales, channels=channels)
             # Write signals
             if generate_all_scales:
                 for scale_idx, sig in enumerate(output_signals_list):
+                    print(sig.shape)
+                    for n, channel in enumerate(sig):
+                        write_signal(
+                            os.path.join(self.output_folder, 'GeneratedSignals',
+                                        f'generated@{self.params.fs_list[scale_idx]}Hz{n}.wav'),
+                            channel, self.params.fs_list[scale_idx], overwrite=False)
+            else:
+                for n, channel in enumerate(output_signals_list):
                     write_signal(
                         os.path.join(self.output_folder, 'GeneratedSignals',
-                                     'generated@%dHz.wav' % self.params.fs_list[scale_idx]),
-                        sig, self.params.fs_list[scale_idx], overwrite=False)
-            else:
-                write_signal(
-                    os.path.join(self.output_folder, 'GeneratedSignals',
-                                 'generated@%dHz.wav' % self.params.fs_list[-1]),
-                    output_signals_list, self.params.fs_list[-1], overwrite=False)
+                                    f'generated@{self.params.fs_list[-1]}Hz{n}.wav'),
+                        channel, self.params.fs_list[-1], overwrite=False)
 
     def reconstruct(self, reconstruction_noise_list=None, write=True):
         if reconstruction_noise_list is None:
@@ -88,7 +94,7 @@ class AudioGenerator(object):
         write_signal(os.path.join(self.params.output_folder, 'GeneratedSignals', 'inpainted'), stitched_signal,
                      self.params.Fs)
 
-    def extend(self, condition, filt_file=None):
+    def extend(self, condition:dict, filt_file=None):
         conditioned_signal = self.condition(condition, False)
         stitched_signal = time_freq_stitch_by_fft(condition['condition_signal'].squeeze().cpu().numpy(),
                                                   conditioned_signal.squeeze().cpu().numpy(),
@@ -99,7 +105,7 @@ class AudioGenerator(object):
         write_signal(output_file, stitched_signal, self.params.Fs)
         return stitched_signal
 
-    def condition(self, condition, write=True):
+    def condition(self, condition:dict, write:bool=True):
         condition["condition_scale_idx"] = np.where(np.array(self.params.fs_list) <= condition["condition_fs"])[0][
                                                -1] + 1
         condition["condition_signal"] = torch.Tensor(condition["condition_signal"]).expand(1, 1, -1).to(
