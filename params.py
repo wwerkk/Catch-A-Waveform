@@ -9,11 +9,11 @@ class Params(object):
         self.segments_to_train = []
         self.min_length = 20
         self.max_length = 25
-        self.plot_signals = False
+        self.plot_signals = True
         self.manual_random_seed = -1 # -1 for no setting
-        self.plot_losses = False
-        self.init_sample_rate = 16000
-        self.fs_list = [320, 400, 500, 640, 800, 1000, 1280, 1600, 2000, 2500, 4000, 8000, 10000, 12000, 14400, 16000]
+        self.plot_losses = True
+        self.init_sample_rate = 40000
+        self.fs_list = [160, 250, 320, 400, 500, 640, 880, 1000, 1280, 1600, 2000, 2500, 3200, 4000, 5000, 8000, 10000, 12000, 14400, 16000, 20000, 25000, 32000, 36000, 40000]
         self.run_mode = 'normal'
         self.speech = False
         self.set_first_scale_by_energy = True
@@ -37,8 +37,8 @@ class Params(object):
         ###########################
         # Optimization Parameters #
         ###########################
-        self.num_epoches = 2000
-        self.learning_rate = 0.0015
+        self.num_epochs = 2000
+        self.learning_rate = 0.0019
         self.scheduler_lr_decay = 0.1
         self.beta1 = 0.5
 
@@ -49,5 +49,6 @@ class Params(object):
         self.num_layers = 8
         self.hidden_channels_init = 16
         self.growing_hidden_channels_factor = 6
+        self.skip_connections = False
 
 
