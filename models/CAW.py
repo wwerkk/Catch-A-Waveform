@@ -8,7 +8,10 @@ class Generator(nn.Module):
         self.body = nn.Sequential()
         self.Fs = params.current_fs
         for i in range(params.num_layers - 2):
-            block = ConvBlock(params, params.hidden_channels, params.hidden_channels, params.dilation_factors[i + 1])
+            if params.skip_connections == True:
+                    block = ResConvBlock(params, params.hidden_channels, params.hidden_channels, params.dilation_factors[i + 1])
+            else:
+                block = ConvBlock(params, params.hidden_channels, params.hidden_channels, params.dilation_factors[i + 1])
             self.body.add_module('block%d' % (i + 1), block)
         self.tail = nn.Sequential()
         self.tail.add_module('tail0',
