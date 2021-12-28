@@ -13,8 +13,8 @@ if __name__ == '__main__':
     parser.add_argument('--condition',
                         help='Condition the generated signals on the lowest scale of input, to enforce general structure',
                         default=False, action='store_true')
-<<<<<<< HEAD
     parser.add_argument('--condition_file', help='file to use to condition the generation of the selected model', type=str, default=None)
+    parser.add_argument('--reconstruct', help='Generate the reconstruction of the signal', default=False, action='store_true')
     args = parser.parse_args()
 
     audio_generator = AudioGenerator(os.path.join('outputs', args.input_folder))
@@ -31,17 +31,9 @@ if __name__ == '__main__':
                 os.path.join(audio_generator.output_folder, 'real@%dHz.wav' % audio_generator.params.fs_list[0]), sr=None)
         condition = {'condition_signal': condition_signal, 'name': args.condition_file, 'condition_fs': condition_fs}
         audio_generator.condition(condition)
-=======
-    parser.add_argument('--reconstruct',
-                        help='Generate the reconstruction of the signal',
-                        default=False, action='store_true')
 
-    args = parser.parse_args()
-
-    audio_generator = AudioGenerator(os.path.join('outputs', args.input_folder))
     if args.reconstruct:
         audio_generator.reconstruct()
->>>>>>> d351ef4962781f58352b37aea3b90e57143e56de
     else:
         if args.condition:
             condition_signal, condition_fs = librosa.load(
