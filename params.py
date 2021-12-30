@@ -23,6 +23,7 @@ class Params(object):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.initial_noise_amp = 1
         self.noise_amp_factor = 0.01
+        self.scale_crop = False
 
         #####################
         # Losses Parameters #
@@ -41,6 +42,7 @@ class Params(object):
         self.learning_rate = 0.0019
         self.scheduler_lr_decay = 0.1
         self.beta1 = 0.5
+        self.lite = False
 
         ####################
         # Model Parameters #
