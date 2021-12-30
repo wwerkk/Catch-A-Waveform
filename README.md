@@ -6,7 +6,7 @@ This is a repo forked from galgreshler/Catch-A-Waveform with modifications for e
 
 ### Modified: "Catch-A-Waveform: Learning to Generate Audio from a Single Short Example" (NeurIPS 2021)
 
-This version has the following experimental features:
+This version has the following features:
 - new training run modes (`resume`, `transfer`)
 - new audio sampling method `--scale_crop` to fit the maximum audio into memory at each scale
 - build models with skip connections in the 1D dialated convolution stacks
