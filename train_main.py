@@ -75,7 +75,6 @@ if params.run_mode == 'inpainting':
     samples[params.inpainting_indices[0]:params.inpainting_indices[1]] = 0
 
 # Set params by run_node and signal type
-params.scheduler_milestones = [int(params.num_epochs * 2 / 3)]
 if params.speech:
     params.alpha1 = 10
     params.alpha2 = 0
@@ -136,7 +135,6 @@ if params.run_mode == 'inpainting':
         params.masks.append(torch.Tensor(current_mask).bool().to(params.device))
 
 print('Running on ' + str(params.device))
-print(params.scales, 'scales')
 # Start training
 output_signals, loss_vectors, generators_list, noise_amp_list, energy_list, reconstruction_noise_list = train(
     params, signals_list)
