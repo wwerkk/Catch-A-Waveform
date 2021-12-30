@@ -148,10 +148,16 @@ def train_single_scale(params, signals_list, fs_list, generators_list, noise_amp
     else:
         optimizerD = optim.Adam(netD.parameters(), lr=params.learning_rate, betas=(params.beta1, 0.999))
         optimizerG = optim.Adam(netG.parameters(), lr=params.learning_rate, betas=(params.beta1, 0.999))
-    schedulerD = torch.optim.lr_scheduler.MultiStepLR(optimizer=optimizerD, milestones=params.scheduler_milestones,
-                                                      gamma=params.scheduler_lr_decay)
-    schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizer=optimizerG, milestones=params.scheduler_milestones,
-                                                      gamma=params.scheduler_lr_decay)
+    if params.run_mode != 'transfer':
+        schedulerD = torch.optim.lr_scheduler.MultiStepLR(optimizer=optimizerD, milestones=params.scheduler_milestones,
+                                                        gamma=params.scheduler_lr_decay)
+        schedulerG = torch.optim.lr_scheduler.MultiStepLR(optimizer=optimizerG, milestones=params.scheduler_milestones,
+                                                        gamma=params.scheduler_lr_decay)
+    else:
+        schedulerD = torch.optim.lr_scheduler.StepLR(optimizer=optimizerD, step_size=10, milestones=params.scheduler_milestones,
+                                                        gamma=params.scheduler_lr_decay)
+        schedulerG = torch.optim.lr_scheduler.StepLR(optimizer=optimizerG, step_size=10,
+                                                        gamma=params.scheduler_lr_decay)
 
     # Initialize error vectors
     if params.scale_crop and params.run_mode == 'transfer':
