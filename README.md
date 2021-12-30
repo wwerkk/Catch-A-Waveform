@@ -119,6 +119,13 @@ our [paper](https://arxiv.org/pdf/2106.06426.pdf)), use the `--condition` flag:
 python generate_main.py --input_folder <model_folder_name> --condition
 ```
 
+
+To create variations from the structure of another audio file, place the wav in the `inputs/` directory, use the `--condition_file` flag:
+
+```
+python generate_main.py --input_folder <model_folder_name> --condition_file <new_audio_file_to_immitate>
+```
+
 ### Bandwidth Exentsion
 
 To perform bandwidth extension with a trained model run the following:
