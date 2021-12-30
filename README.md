@@ -1,8 +1,12 @@
 # Catch-A-Waveform
 
+This is a repo forked from galgreshler/Catch-A-Waveform with modifications for extreme music genres made by Dadabots. This repo is a work in progress and will attempt to stay compatible with upstream updates from the original authors. For more info on the modifications in this fork, feel free to email thedadabot@gmail.com
+
 [Project Website](https://galgreshler.github.io/Catch-A-Waveform/) | [Paper](https://arxiv.org/pdf/2106.06426.pdf)
 
 ### Modified: "Catch-A-Waveform: Learning to Generate Audio from a Single Short Example" (NeurIPS 2021)
+
+This version has the following experimental features:
 - new training run modes (`resume`, `transfer`)
 - new audio sampling method `--scale_crop` to fit the maximum audio into memory at each scale
 - build models with skip connections in the 1D dialated convolution stacks
