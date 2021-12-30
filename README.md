@@ -5,8 +5,10 @@
 ### Modified: "Catch-A-Waveform: Learning to Generate Audio from a Single Short Example" (NeurIPS 2021)
 - new training run modes (`resume`, `transfer`)
 - new audio sampling method `--scale_crop` to fit the maximum audio into memory at each scale
-- skip connections through summed residual layers in the dialated conv stack
-- new params for complex music (more scales)
+- build models with skip connections in the 1D dialated convolution stacks
+- new hyperparams for complex music using more scales from 160Hz to 40kHz
+- option to condition from any audio `--condition_file` when generating
+- experimental `lite` training with precision reduced optimizers to consume less memory
 
 ## Generate audio from a single audio input
 
@@ -56,6 +58,26 @@ To train denoising task, set `run_mode` to `denosing`:
 ```
 python train_main.py --input_file <input_file_name> --run_mode denoising
 ```
+
+#### Resume
+To resume training by loading existing models and continuing with more scales, set `run_mode` to `resume` and specify and `output_folder` of the partially trained model:
+
+#### Transfer (Experimental)
+
+To transfer learn all the scales on a new audio file, set `run_mode` to `transfer` and specify and `output_folder` of the fully trained model:
+
+```
+python train_main.py --input_file <new_file_name> --run_mode transfer --output_folder <trained_model_directory>
+```
+
+#### lite
+If the model and data will not fit into memory during the backward pass, you can try to use the lite version of the optimizer.
+
+```
+python train_main.py --input_file <input_file_name>
+```
+
+
 
 ## Inference
 
@@ -179,7 +201,7 @@ The models can be downloaded from [Google Drive](https://drive.google.com/drive/
 
 ## Citation
 
-If you use this code in your research, please cite our paper:
+If you use this code in your research, please cite the original paper:
 
 ```
 @article{greshler2021catch,
