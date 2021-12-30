@@ -5,8 +5,10 @@
 ### Modified: "Catch-A-Waveform: Learning to Generate Audio from a Single Short Example" (NeurIPS 2021)
 - new training run modes (`resume`, `transfer`)
 - new audio sampling method `--scale_crop` to fit the maximum audio into memory at each scale
-- skip connections through summed residual layers in the dialated conv stack
-- new params for complex music (more scales)
+- build models with skip connections in the 1D dialated convolution stacks
+- new hyperparams for complex music using more scales from 160Hz to 40kHz
+- option to condition from any audio `--condition_file` when generating
+- experimental `lite` training with precision reduced optimizers to consume less memory
 
 ## Generate audio from a single audio input
 
@@ -57,6 +59,37 @@ To train denoising task, set `run_mode` to `denosing`:
 python train_main.py --input_file <input_file_name> --run_mode denoising
 ```
 
+#### Resume
+To resume training by loading existing models and continuing with more scales, set `run_mode` to `resume` and specify and `output_folder` of the partially trained model:
+
+```
+python train_main.py --input_file <new_file_name> --run_mode resume --output_folder <trained_model_directory>
+```
+
+#### Transfer (Experimental)
+
+To transfer learn all the scales on a new audio file, set `run_mode` to `transfer` and specify and `output_folder` of the fully trained model:
+
+```
+python train_main.py --input_file <new_file_name> --run_mode transfer --output_folder <trained_model_directory>
+```
+
+Tip: reducing the `--num_epochs` might be a good idea before catastrophic forgetting occurs during transfer learning
+
+#### lite
+If the model and data will not fit into memory during the backward pass, you can try to use the lite version of the optimizer.
+
+```
+python train_main.py --input_file <input_file_name> --lite
+```
+
+#### skip connections
+To go deeper (e.g. `num_layers` > 8 or `filter_size` > 9), adding residule connections may help. This can be tested for any `run_mode` by training with `--skip_connections`
+```
+python train_main.py --input_file <input_file_name> --skip_connections
+```
+
+
 ## Inference
 
 ### Uncoditional generation
@@ -84,6 +117,13 @@ our [paper](https://arxiv.org/pdf/2106.06426.pdf)), use the `--condition` flag:
 
 ```
 python generate_main.py --input_folder <model_folder_name> --condition
+```
+
+
+To create variations from the structure of another audio file, place the wav in the `inputs/` directory, use the `--condition_file` flag:
+
+```
+python generate_main.py --input_folder <model_folder_name> --condition_file <new_audio_file_to_immitate>
 ```
 
 ### Bandwidth Exentsion
@@ -179,7 +219,7 @@ The models can be downloaded from [Google Drive](https://drive.google.com/drive/
 
 ## Citation
 
-If you use this code in your research, please cite our paper:
+If you use this code in your research, please cite the original paper:
 
 ```
 @article{greshler2021catch,
