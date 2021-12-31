@@ -64,7 +64,7 @@ python train_main.py --input_file <input_file_name> --run_mode denoising
 ```
 
 #### Resume
-To resume training by loading existing models and continuing with more scales, set `run_mode` to `resume` and specify and `output_folder` of the partially trained model:
+To resume training by loading existing models and continuing with more scales, set `run_mode` to `resume` and specify an `output_folder` of the partially trained model:
 
 ```
 python train_main.py --input_file <new_file_name> --run_mode resume --output_folder <trained_model_directory>
