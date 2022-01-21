@@ -78,7 +78,7 @@ To transfer learn all the scales on a new audio file, set `run_mode` to `transfe
 python train_main.py --input_file <new_file_name> --run_mode transfer --output_folder <trained_model_directory>
 ```
 
-Tip: reducing the `--num_epochs` might be a good idea before catastrophic forgetting occurs during transfer learning
+Tip: reducing the `--num_epochs` might be a good idea to avoid catastrophic forgetting occurs during transfer learning
 
 #### lite
 If the model and data will not fit into memory during the backward pass, you can try to use the lite version of the optimizer.
@@ -215,6 +215,7 @@ python train_main.py --input_file JosephJoachim_BachAdagio_1904 --run_mode denoi
 ```
 
 Here we set the `init_sample_rate` to be 10KHz (default is 16Khz) since the old recording has limited bandwidth.
+
 
 ## Pretrained Models
 Instead of running the examples yourself, you can download the pretrained generators and just perform inference. After downloaing the folders, put them inside `outputs` folder and run inference.
