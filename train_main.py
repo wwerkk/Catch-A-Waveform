@@ -28,8 +28,11 @@ if __name__ == '__main__':
     parser.add_argument('--plot_signals', help='Plot signals', default=False, action='store_true')
     parser.add_argument('--output_folder', help='output directory with models and signals', type=str)
     parser.add_argument('--scale_crop', help='crop the signal to use a fixed frame at each scale - used for fitting high sample rates in memory', default=False, action='store_true')
-    parser.add_argument('--lite', help='use a precision reduced version of adam optimizers to reduce the memory load of back prop', default=False, action='store_true')
+    parser.add_argument('--lite', help='use a precision reduced (8-bit) version of adam optimizers; reduces the memory load of back prop', default=False, action='store_true')
     parser.add_argument('--skip_connections', help='flag to add residual connections between conv blocks', default=False, action='store_true')
+    parser.add_argument('--filter_size', help='size of convolution kernel', default=9, type=int)
+    parser.add_argument('--hidden_channels_init', help='number of filters to output in initial 1D convolution layers', default=16, type=int)
+    parser.add_argument('--ttur', help='use a "Two Time-Scale Update Rule"; one for generators and one for discriminators; learning_rate_g and learning_rate_d', default=False, action='store_true')
     params_parsed = parser.parse_args()
     if params_parsed.run_mode == 'resume' or params_parsed.run_mode == 'transfer':
         params_parsed.output_folder = os.path.join('outputs', params_parsed.output_folder) 

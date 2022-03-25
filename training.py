@@ -142,12 +142,18 @@ def train_single_scale(params, signals_list, fs_list, generators_list, noise_amp
     #
     params.scheduler_milestones = [int(params.num_epochs * 2 / 3)]
     # Create optimizers
-    if params.lite: # add bnb optimizer
-        optimizerD = bnb.optim.Adam8bit(netD.parameters(), lr=params.learning_rate, betas=(params.beta1, 0.999)) 
-        optimizerG = bnb.optim.Adam8bit(netG.parameters(), lr=params.learning_rate, betas=(params.beta1, 0.999))
+    if params.ttur:
+        lr_d = params.learning_rate_d
+        lr_g = params.learning_rate_g
     else:
-        optimizerD = optim.Adam(netD.parameters(), lr=params.learning_rate, betas=(params.beta1, 0.999))
-        optimizerG = optim.Adam(netG.parameters(), lr=params.learning_rate, betas=(params.beta1, 0.999))
+        lr_d = params.learning_rate
+        lr_g = params.learning_rate
+    if params.lite: # add bnb optimizer
+        optimizerD = bnb.optim.Adam8bit(netD.parameters(), lr=lr_d, betas=(params.beta1, 0.999)) 
+        optimizerG = bnb.optim.Adam8bit(netG.parameters(), lr=lr_g, betas=(params.beta1, 0.999))
+    else:
+        optimizerD = optim.Adam(netD.parameters(), lr=lr_d, betas=(params.beta1, 0.999))
+        optimizerG = optim.Adam(netG.parameters(), lr=lr_g, betas=(params.beta1, 0.999))
     if params.run_mode != 'transfer':
         schedulerD = torch.optim.lr_scheduler.MultiStepLR(optimizer=optimizerD, milestones=params.scheduler_milestones,
                                                         gamma=params.scheduler_lr_decay)
