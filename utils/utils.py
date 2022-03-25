@@ -127,7 +127,7 @@ def create_input_signals(params:object, input_signal:np.ndarray, Fs:int):
         else:
             coarse_sig = torch.Tensor(librosa.resample(input_signal.squeeze().numpy(), Fs, fs))
         if params.scale_crop == True:
-            print(downsample, coarse_sig.shape[-1], 'min:', min([crop_length, coarse_sig.shape[-1]]), int((min([crop_length, coarse_sig.shape[-1]])/coarse_sig.shape[-1])*100),'%')
+            print(downsample, coarse_sig.shape[-1], int((min([crop_length, coarse_sig.shape[-1]])/coarse_sig.shape[-1])*100),'%')
             #crop_length = int(coarse_sig.shape[0] / params.scales[-k-1])
             #print(n_scales-params.scales[n_scales-k-1], downsample, coarse_sig.shape[-1], '->', crop_length)
             coarse_sig = coarse_sig[:min([crop_length, coarse_sig.shape[-1]])]
@@ -229,7 +229,7 @@ def get_input_signal(params:object):
 
 
 def draw_signal(params:object, generators_list:list, signals_lengths_list:list, fs_list:list, noise_amp_list:list, reconstruction_noise_list:list=None,
-                condition:list=None, output_all_scales:bool=False, channels:int=1):
+                condition:list=None, output_all_scales:bool=False):
     # Draws a signal up to current scale, using learned generators
     if params.run_mode == 'resume':
         #print(len(noise_amp_list), len(generators_list), signals_lengths_list)
@@ -255,6 +255,8 @@ def draw_signal(params:object, generators_list:list, signals_lengths_list:list, 
         this assert error might happen if the number if the fs list for all the scales changes between resume runs
         '''
     pad_size = calc_pad_size(params)
+    if output_all_scales:
+        signals_all_scales = []
     for scale_idx, (netG, noise_amp) in enumerate(zip(generators_list, noise_amp_list)):
         signal_padder = nn.ConstantPad1d(pad_size, 0)
         if condition is None:
@@ -308,27 +310,16 @@ def draw_signal(params:object, generators_list:list, signals_lengths_list:list, 
             noise_signal = signal_padder(noise_signal)
             noise_signal = noise_signal * noise_amp
             prev_sig = signal_padder(prev_sig)
-
         # Generate this scale signal
         if noise_signal.shape != prev_sig.shape:
             print(scale_idx, fs_list[scale_idx], noise_signal.shape, prev_sig.shape, n_samples)
-        cur_sigs = [[]] * channels
-        if channels > 1:
-            for sample in range(noise_signal.shape[-1]):
-                for channel in range(channels):
-                    if channel == 0:
-                        #cur_sigs[0] = netG((noise_signal + prev_sig).detach(), prev_sig)
-                        #todo finish
-                        print('Error: code not complete for multi channel')
-        elif channels == 1:
-            cur_sigs[0] = netG((noise_signal + prev_sig).detach(), prev_sig)
-        else:
-            raise ValueError('channels must be >= 1')
-            
+        cur_sig = netG((noise_signal + prev_sig).detach(), prev_sig)
+        if output_all_scales:
+            signals_all_scales.append(torch.squeeze(cur_sig).detach().cpu().numpy())
 
         # Upsample for next scale
         if scale_idx < len(fs_list) - 1:
-            up_sig = resample_sig(params, cur_sigs[0], orig_fs=fs_list[scale_idx], target_fs=fs_list[scale_idx + 1])
+            up_sig = resample_sig(params, cur_sig, orig_fs=fs_list[scale_idx], target_fs=fs_list[scale_idx + 1])
             if up_sig.shape[2] > signals_lengths_list[scale_idx + 1]:
                 assert abs(
                     up_sig.shape[2] > signals_lengths_list[scale_idx + 1]) < 20, 'Should not happen, check this!'
@@ -340,17 +331,13 @@ def draw_signal(params:object, generators_list:list, signals_lengths_list:list, 
                     (up_sig, up_sig.new_zeros(1, 1, signals_lengths_list[scale_idx + 1] - up_sig.shape[2])),
                     dim=2)
         else:
-            up_sig = cur_sigs[0]
+            up_sig = cur_sig
         prev_sig = up_sig
         prev_sig = prev_sig.detach()
 
-        del up_sig, cur_sigs, noise_signal, netG
+        del up_sig, cur_sig, noise_signal, netG
 
     if output_all_scales:
-        #TODO finish logic for 2 model generation
-        signals_all_scales = [[]] * channels
-        for channel in range(channels):
-            signals_all_scales[channel](torch.squeeze(cur_sigs[channel]).detach().cpu().numpy())
         return signals_all_scales
     else:
         return prev_sig
