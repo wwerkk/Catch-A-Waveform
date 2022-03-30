@@ -301,6 +301,7 @@ def draw_signal(params:object, generators_list:list, signals_lengths_list:list, 
                 if scale_idx == 0:
                     prev_sig = signal_padder(prev_sig)
         else:
+            print(scale_idx)
             if scale_idx < condition["condition_scale_idx"]:
                 continue
             elif scale_idx == condition["condition_scale_idx"]:
@@ -336,12 +337,87 @@ def draw_signal(params:object, generators_list:list, signals_lengths_list:list, 
         prev_sig = prev_sig.detach()
 
         del up_sig, cur_sig, noise_signal, netG
+        print(scale_idx, prev_sig.shape)
 
     if output_all_scales:
         return signals_all_scales
     else:
         return prev_sig
 
+# autoregressive -- earlier_signals_list
+def draw_signal2(params, generators_list, signals_lengths_list, fs_list, noise_amp_list, reconstruction_noise_list=None,
+                condition=None, output_all_scales=True, earlier_signals_list=None, hop_ratio = 0.5):
+    #assert earlier_signals_list is not None
+   # assert len(earlier_signals_list) == len(signals_lengths_list)
+    assert output_all_scales == True
+    # Draws a signal up to current scale, using learned generators
+    pad_size = calc_pad_size(params)
+    if output_all_scales:
+        signals_all_scales = []
+    for scale_idx, (netG, noise_amp) in enumerate(zip(generators_list, noise_amp_list)):
+        signal_padder = nn.ConstantPad1d(pad_size, 0)
+        
+        n_samples = signals_lengths_list[scale_idx]
+        
+        noise_signal = get_noise(params, (1, 1, n_samples))
+        noise_signal = noise_signal * noise_amp
+
+        if scale_idx == 0:
+            prev_sig = torch.full(noise_signal.shape, 0, device=params.device, dtype=noise_signal.dtype)
+        else:
+            prev_sig = signal_padder(prev_sig)
+
+        # pad noise with zeros, to match signal after filtering
+        if reconstruction_noise_list is None:
+            # reconstruction_noise is already padded
+            noise_signal = signal_padder(noise_signal)
+            if scale_idx == 0:
+                prev_sig = signal_padder(prev_sig)
+
+        # Generate this scale signal
+        cur_sig = netG((noise_signal + prev_sig).detach(), prev_sig)
+        
+        
+        #print(cur_sig.shape)
+        # CONTINUATIONS===
+        # input the previous signal
+        earlier_sig = earlier_signals_list[scale_idx]
+        # 50% window
+        # earlier_sig = earlier_sig[len(earlier_sig)//2:] 
+        # 10% window
+        earlier_sig = earlier_sig[round(len(earlier_sig)*(1-hop_ratio)):] 
+
+        # paste in the earlier sig into the beginning
+        cur_sig[:,:,:len(earlier_sig)] = torch.tensor(earlier_sig)
+
+        if output_all_scales:
+            #signals_all_scales.append(torch.squeeze(cur_sig).detach().cpu().numpy())
+            signals_all_scales.append(torch.squeeze(cur_sig).detach().cpu().numpy())
+
+        # Upsample for next scale
+        if scale_idx < len(fs_list) - 1:
+            up_sig = resample_sig(params, cur_sig, orig_fs=fs_list[scale_idx], target_fs=fs_list[scale_idx + 1])
+            if up_sig.shape[2] > signals_lengths_list[scale_idx + 1]:
+                assert abs(
+                    up_sig.shape[2] > signals_lengths_list[scale_idx + 1]) < 20, 'Should not happen, check this!'
+                up_sig = up_sig[:, :, :signals_lengths_list[scale_idx + 1]]
+            elif up_sig.shape[2] < signals_lengths_list[scale_idx + 1]:
+                assert abs(
+                    up_sig.shape[2] < signals_lengths_list[scale_idx + 1]) < 20, 'Should not happen, check this!'
+                up_sig = torch.cat(
+                    (up_sig, up_sig.new_zeros(1, 1, signals_lengths_list[scale_idx + 1] - up_sig.shape[2])),
+                    dim=2)
+        else:
+            up_sig = cur_sig
+        prev_sig = up_sig
+        prev_sig = prev_sig.detach()
+
+        del up_sig, cur_sig, noise_signal, netG
+
+    if output_all_scales:
+        return signals_all_scales
+    else:
+        return prev_sig
 
 def cast_general(x):
     if x.isdigit():  # int

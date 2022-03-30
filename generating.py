@@ -1,3 +1,4 @@
+from time import sleep 
 from utils.utils import *
 from utils.plotters import *
 import os
@@ -29,7 +30,26 @@ class AudioGenerator(object):
         if not os.path.exists(os.path.join(output_folder, 'GeneratedSignals')):
             os.mkdir(os.path.join(output_folder, 'GeneratedSignals'))
 
-    def generate(self, nSignals:int=1, length:int=20, generate_all_scales:bool=False, channels:int=1):
+    def generate(self, nSignals=1, length=20, generate_all_scales=False):
+        for sig_idx in range(nSignals):
+            # Draws a signal up to current scale, using learned generators
+            output_signals_list = draw_signal(self.params, self.generators_list,
+                                              [round(f * length) for f in self.params.fs_list], self.params.fs_list,
+                                              self.noise_amp_list, output_all_scales=generate_all_scales)
+            # Write signals
+            if generate_all_scales:
+                for scale_idx, sig in enumerate(output_signals_list):
+                    write_signal(
+                        os.path.join(self.output_folder, 'GeneratedSignals',
+                                     'generated@%dHz.wav' % self.params.fs_list[scale_idx]),
+                        sig, self.params.fs_list[scale_idx], overwrite=False)
+            else:
+                write_signal(
+                    os.path.join(self.output_folder, 'GeneratedSignals',
+                                 'generated@%dHz.wav' % self.params.fs_list[-1]),
+                    output_signals_list, self.params.fs_list[-1], overwrite=False)
+
+    def generate_multi(self, nSignals:int=1, length:int=20, generate_all_scales:bool=False, channels:int=1):
         for sig_idx in range(nSignals):
             # Draws a signal up to current scale, using learned generators
             output_signals_list = draw_signal(self.params, self.generators_list,
@@ -120,3 +140,46 @@ class AudioGenerator(object):
             write_signal(output_file, conditioned_signal, self.params.Fs)
         else:
             return conditioned_signal
+
+    def infinite(self, window_length:int=30, generate_mode:str='local'):
+        n_signals:int=1
+        sleep_time:int=5
+        generate_all_scales:bool=True
+        hop_ratio:float=0.5
+
+        output_signals_list = draw_signal(self.params, self.generators_list,
+                                            [round(f * window_length) for f in self.params.fs_list], self.params.fs_list,
+                                            self.noise_amp_list, output_all_scales=generate_all_scales)
+        accumulate = output_signals_list[-1]
+
+        write_signal('generate.wav',
+                accumulate, 
+                self.params.fs_list[-1], 
+                overwrite=True)
+
+        sleep(10)
+        if generate_mode == 'local':
+            n:int=0
+        elif generate_mode == 'web':
+            print('run the following to connect to youtube \n>ffmpeg -re -stream_loop -1 -i logo.mp4 -f concat -i playlist1.txt -c:a aac -ab 128k -strict experimental  -movflags +faststart  -f flv rtmp://a.rtmp.youtube.com/live2/xxxxxxxxxx ')
+
+        while True:
+
+            output_signals_list = draw_signal2(self.params, self.generators_list,
+                                            [round(f * window_length) for f in self.params.fs_list], self.params.fs_list,
+                                            self.noise_amp_list, output_all_scales=generate_all_scales,
+                                            earlier_signals_list = output_signals_list, hop_ratio = hop_ratio)
+            new_window = output_signals_list[-1]
+            new_window = new_window[round(len(new_window)*hop_ratio):]
+            if generate_mode == 'local':
+                fname = f'infinite_generate{n}.wav'
+                n += 1
+            elif generate_mode == 'web':
+                fname == 'infinite_generate.wav'
+            output_file = os.path.join(self.output_folder, fname)
+            write_signal(output_file,
+                new_window, 
+                self.params.fs_list[-1], 
+                overwrite=True)
+            print('wrote', output_file)
+            sleep(sleep_time)

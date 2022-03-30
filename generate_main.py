@@ -15,29 +15,35 @@ if __name__ == '__main__':
                         default=False, action='store_true')
     parser.add_argument('--condition_file', help='file to use to condition the generation of the selected model', type=str, default=None)
     parser.add_argument('--reconstruct', help='Generate the reconstruction of the signal', default=False, action='store_true')
+    parser.add_argument('--condition_fs', help='the sample rate to insert the conditioning from the condition_file', type=int, default=40000)
+    parser.add_argument('--infinite', help='Generate infinite wav signals in chunks', default=False, action='store_true')
     args = parser.parse_args()
 
     audio_generator = AudioGenerator(os.path.join('outputs', args.input_folder))
+    if args.condition_file:
+        args.condition = True
     if args.condition or args.condition_file:
         if args.condition_file:
             print('conditioning with custom file', args.condition_file + '.wav')
             condition_signal, condition_fs = librosa.load(
-                os.path.join('inputs/', args.condition_file + '.wav'), sr=audio_generator.params.fs_list[0],  duration=args.length)
+                os.path.join('inputs/', args.condition_file + '.wav'), sr=args.condition_fs,  duration=args.length)
             norm_factor = max(abs(condition_signal.reshape(-1)))
             print(norm_factor, 'norm factor')
             condition_signal = condition_signal / norm_factor
         else:
             condition_signal, condition_fs = librosa.load(
-                os.path.join(audio_generator.output_folder, 'real@%dHz.wav' % audio_generator.params.fs_list[0]), sr=None)
+                os.path.join(audio_generator.output_folder, 'real@%dHz.wav' % audio_generator.params.fs_list[0]), sr=args.condition_fs)
         condition = {'condition_signal': condition_signal, 'name': args.condition_file, 'condition_fs': condition_fs}
         audio_generator.condition(condition)
 
     if args.reconstruct:
         audio_generator.reconstruct()
     else:
-        if args.condition:
+        if args.infinite:
+            audio_generator.infinite(window_length=args.length)
+        elif args.condition:
             condition_signal, condition_fs = librosa.load(
-                os.path.join(audio_generator.output_folder, 'real@%dHz.wav' % audio_generator.params.fs_list[0]), sr=None)
+                os.path.join(audio_generator.output_folder, 'real@%dHz.wav' % audio_generator.params.fs_list[0]), sr=args.condition_fs)
             condition = {'condition_signal': condition_signal, 'name': 'self', 'condition_fs': condition_fs}
             audio_generator.condition(condition)
         else:
