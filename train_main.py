@@ -22,7 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_layers', help='Number of layers in each model', default=8, type=int)
     parser.add_argument('--speech', default=False, action='store_true')
     parser.add_argument('--run_mode', default='normal', type=str, choices=['normal', 'inpainting', 'denoising', 'resume', 'transfer'])
-    parser.add_argument('--inpainting_indices', default=[0, 1], nargs=2, type=int,
+    parser.add_argument('--inpainting_indices', default=[0, 1], nargs='+', type=int,
                         help='Start and end indices of hole (for inpainting)')
     parser.add_argument('--plot_losses', help='Save and plot GAN losses', default=True, action='store_true')
     parser.add_argument('--plot_signals', help='Plot signals', default=False, action='store_true')
@@ -47,6 +47,9 @@ if params_parsed.run_mode == "resume" or params_parsed.run_mode == 'transfer':
         params = override_params(params, params_logged)
     else:
         print(f'Warning: unable to load params from previous training run. {log_file} does not exist')
+
+if len(params.inpainting_indices)%2 != 0:
+    raise Exception('Provide START and END indices of each hole!')
 
 params = override_params(params, params_parsed)
 params.Fs = params.init_sample_rate
@@ -75,9 +78,12 @@ print('Working on file: %s' % params.input_file)
 # Create a random hole for inpainting
 if params.run_mode == 'inpainting':
     samples_orig = samples.copy()
-    samples[params.inpainting_indices[0]:params.inpainting_indices[1]] = 0
+    params.inpainting_indices = list(zip(params.inpainting_indices[0::2], params.inpainting_indices[1::2]))
+    for hole_idx in params.inpainting_indices:
+        samples[hole_idx[0]:hole_idx[1]] = 0
 
 # Set params by run_node and signal type
+params.scheduler_milestones = [int(params.num_epochs * 2 / 3)]
 if params.speech:
     params.alpha1 = 10
     params.alpha2 = 0
@@ -132,10 +138,13 @@ if params.run_mode == 'inpainting':
     params.masks = []
     for scale, real_signal in zip(params.scales, signals_list):
         idcs = np.array(range(len(real_signal)))
-        cur_hole_start_idx = int(params.inpainting_indices[0] / scale)
-        cur_hole_end_idx = int(params.inpainting_indices[1] / scale)
-        current_mask = np.logical_or(idcs < cur_hole_start_idx, idcs >= cur_hole_end_idx)
-        params.masks.append(torch.Tensor(current_mask).bool().to(params.device))
+        total_mask = np.ones(len(real_signal), dtype=bool)
+        for hole_idx in params.inpainting_indices:
+            cur_hole_start_idx = int(hole_idx[0] / scale)
+            cur_hole_end_idx = int(hole_idx[1] / scale)
+            current_mask = np.logical_or(idcs < cur_hole_start_idx, idcs >= cur_hole_end_idx)
+            total_mask = np.logical_and(current_mask, total_mask)
+        params.masks.append(torch.Tensor(total_mask).bool().to(params.device))
 
 print('Running on ' + str(params.device))
 # Start training
