@@ -50,7 +50,7 @@ class ResConvBlock(nn.Sequential):
         self.norm = nn.BatchNorm1d(out_channels)
         self.activation = nn.LeakyReLU(0.2, inplace=True)
 
-    def forward(self, x, use_mask=False):
+    def forward(self, x, use_mask=False) -> torch.Tensor:
         out_conv = self.conv(x)
         if use_mask:
             tmp = torch.cat((out_conv[:, :, :int(self.mask_out[0])], out_conv[:, :, int(self.mask_out[1] + 1):]), dim=2)
@@ -80,7 +80,7 @@ class ConvBlock(nn.Sequential):
         self.norm = nn.BatchNorm1d(out_channels)
         self.activation = nn.LeakyReLU(0.2, inplace=True)
 
-    def forward(self, x, use_mask=False):
+    def forward(self, x, use_mask=False) -> torch.Tensor:
         out_conv = self.conv(x)
         if use_mask:
             tmp = torch.cat((out_conv[:, :, :int(self.mask_out[0])], out_conv[:, :, int(self.mask_out[1] + 1):]), dim=2)
