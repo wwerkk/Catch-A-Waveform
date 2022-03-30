@@ -8,6 +8,7 @@ This is a repo forked from galgreshler/Catch-A-Waveform with modifications for e
 
 This version has the following features:
 - new training run modes (`resume`, `transfer`)
+- new generating run mode (`infinite`)
 - new audio sampling method `--scale_crop` to fit the maximum audio into memory at each scale
 - build models with skip connections in the 1D dialated convolution stacks
 - new hyperparams for complex music using more scales from 160Hz to 40kHz
@@ -119,6 +120,15 @@ python generate_main.py --input_folder <model_folder_name> --n_signals 3 --lengt
 ```
 
 To write signals of all scales, use the flag `--generate_all_scales`.
+
+### Infinite Generation
+Generate in an infinite loop continuous output in chunked wav files for concetenating or streaming with other software. The infinite function sleeps for 5 seconds between each inference pass.
+
+```
+python generate_main.py --input_folder <model_folder_name> --infinite
+```
+
+`--length` can determine the segment length if there are buffering or memory issues
 
 ### Create music variations
 
