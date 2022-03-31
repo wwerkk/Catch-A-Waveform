@@ -48,7 +48,7 @@ if params_parsed.run_mode == "resume" or params_parsed.run_mode == 'transfer':
     else:
         print(f'Warning: unable to load params from previous training run. {log_file} does not exist')
 
-if len(params.inpainting_indices)%2 != 0:
+if params.run_mode == 'inpaininting' and len(params.inpainting_indices)%2 != 0:
     raise Exception('Provide START and END indices of each hole!')
 
 params = override_params(params, params_parsed)
