@@ -343,7 +343,6 @@ def draw_signal(params:object, generators_list:list, signals_lengths_list:list, 
         prev_sig = prev_sig.detach()
 
         del up_sig, cur_sig, noise_signal, netG
-        print(scale_idx, prev_sig.shape)
 
     if output_all_scales:
         return signals_all_scales
