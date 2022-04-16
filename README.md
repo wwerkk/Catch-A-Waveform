@@ -9,10 +9,11 @@ This is a repo forked from galgreshler/Catch-A-Waveform with modifications for e
 This version has the following features:
 - new training run modes (`resume`, `transfer`)
 - new generating run mode (`infinite`)
-- new audio sampling method `--scale_crop` to fit the maximum audio into memory at each scale
+- new audio sampling method `--scale_crop` to fit the maximum audio into memory at each scale (fixed frames)
 - build models with skip connections in the 1D dialated convolution stacks
-- new hyperparams for complex music using more scales from 160Hz to 40kHz
+- new hyperparams for complex music using more scales from 250Hz to 44.1kHz
 - option to condition from any audio `--condition_file` when generating
+- option to condition from any frequency scale with `--condition_fs` when generating
 - experimental `lite` training with precision reduced optimizers to consume less memory
 
 ## Generate audio from a single audio input
@@ -144,6 +145,12 @@ To create variations from the structure of another audio file, place the wav in 
 
 ```
 python generate_main.py --input_folder <model_folder_name> --condition_file <new_audio_file_to_immitate>
+```
+
+The conditioned signal can be inserted at any scale to specify a frequency to condition from
+
+```
+python generate_main.py --input_folder <model_folder_name> --condition --condition_fs 1000
 ```
 
 ### Bandwidth Exentsion

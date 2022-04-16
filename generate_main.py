@@ -32,10 +32,10 @@ if __name__ == '__main__':
         print(condition_scale, condition_fs)
         if args.condition_file:
             print('conditioning with custom file', args.condition_file + '.wav')
-            condition_file = args.condition_file
+            condition_file = f'{args.condition_file}{condition_fs}'.replace('/', '-')
             print(f'conditioning at scale index {condition_scale}: {condition_fs}Hz')
             condition_signal, _ = librosa.load(
-                os.path.join('inputs/', f'{condition_file}{condition_fs}' + '.wav'), sr=condition_fs,  duration=args.length)
+                os.path.join('inputs/', args.condition_file + '.wav'), sr=condition_fs,  duration=args.length)
             norm_factor = max(abs(condition_signal.reshape(-1)))
             print(norm_factor, 'norm factor', len(condition_signal), 'condition length')
             condition_signal = condition_signal / norm_factor
