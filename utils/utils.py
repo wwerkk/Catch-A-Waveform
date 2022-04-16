@@ -235,7 +235,7 @@ def get_input_signal(params:object):
 
 
 def draw_signal(params:object, generators_list:list, signals_lengths_list:list, fs_list:list, noise_amp_list:list, reconstruction_noise_list:list=None,
-                condition:list=None, output_all_scales:bool=False):
+                condition:dict=None, output_all_scales:bool=False):
     # Draws a signal up to current scale, using learned generators
     if params.run_mode == 'resume':
         #print(len(noise_amp_list), len(generators_list), signals_lengths_list)
@@ -307,10 +307,11 @@ def draw_signal(params:object, generators_list:list, signals_lengths_list:list, 
                 if scale_idx == 0:
                     prev_sig = signal_padder(prev_sig)
         else:
-            print(scale_idx)
             if scale_idx < condition["condition_scale_idx"]:
+                print(scale_idx, params.fs_list[scale_idx], 'continue')
                 continue
             elif scale_idx == condition["condition_scale_idx"]:
+                print('resample_sig')
                 prev_sig = resample_sig(params, condition["condition_signal"], condition['condition_fs'],
                                         params.fs_list[scale_idx]).expand(1, 1, -1)
             noise_signal = get_noise(params, prev_sig.shape[2]).expand(1, 1, -1)
@@ -343,7 +344,7 @@ def draw_signal(params:object, generators_list:list, signals_lengths_list:list, 
         prev_sig = prev_sig.detach()
 
         del up_sig, cur_sig, noise_signal, netG
-
+        print(len(prev_sig))
     if output_all_scales:
         return signals_all_scales
     else:

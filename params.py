@@ -13,7 +13,7 @@ class Params(object):
         self.manual_random_seed = -1 # -1 for no setting
         self.plot_losses = True
         self.init_sample_rate = 40000
-        self.fs_list = [160, 250, 320, 400, 500, 640, 880, 1000, 1280, 1600, 2000, 2500, 3200, 4000, 5000, 8000, 10000, 12000, 14400, 16000, 20000, 25000, 32000, 36000, 40000, 44100]
+        self.fs_list = [250, 320, 400, 500, 640, 880, 1000, 1280, 1600, 2000, 2500, 3200, 4000, 5000, 8000, 10000, 12000, 14400, 16000, 20000, 25000, 32000, 36000, 40000, 44100]
         self.run_mode = 'normal'
         self.speech = False
         self.set_first_scale_by_energy = True
@@ -55,5 +55,4 @@ class Params(object):
         self.hidden_channels_init = 16
         self.growing_hidden_channels_factor = 6
         self.skip_connections = False
-
 
