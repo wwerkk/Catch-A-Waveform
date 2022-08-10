@@ -2,6 +2,7 @@ from utils.utils import *
 import glob
 from params import Params
 from training import train
+#import training_batch.train
 from utils.plotters import *
 import time
 from datetime import datetime
@@ -33,9 +34,14 @@ if __name__ == '__main__':
     parser.add_argument('--filter_size', help='size of convolution kernel', default=9, type=int)
     parser.add_argument('--hidden_channels_init', help='number of filters to output in initial 1D convolution layers', default=16, type=int)
     parser.add_argument('--ttur', help='use a "Two Time-Scale Update Rule"; one for generators and one for discriminators; learning_rate_g and learning_rate_d', default=False, action='store_true')
+    parser.add_argument('--num_trained', help='scale number to start training from', default=0, type=int)
+    parser.add_argument('--learn_milestones', help='Save and plot GAN losses', default=False, action='store_true')
     params_parsed = parser.parse_args()
     if params_parsed.run_mode == 'resume' or params_parsed.run_mode == 'transfer':
-        params_parsed.output_folder = os.path.join('outputs', params_parsed.output_folder) 
+        if not params_parsed.output_folder:
+            print("ERROR: must define output folder of trained model")
+        else:
+            params_parsed.output_folder = os.path.join('outputs', params_parsed.output_folder) 
 
 startTime = time.time()
 params = Params()
@@ -53,8 +59,8 @@ if params.run_mode == 'inpaininting' and len(params.inpainting_indices)%2 != 0:
 
 params = override_params(params, params_parsed)
 params.Fs = params.init_sample_rate
-if params.run_mode == 'transfer':
-    params.learning_rate == 0.000015
+#if params.run_mode == 'transfer':
+#    params.learning_rate == 0.0001
 if params.is_cuda:
     torch.cuda.set_device(params.gpu_num)
     params.device = torch.device("cuda:%d" % params.gpu_num)
@@ -88,19 +94,27 @@ if params.speech:
     params.alpha1 = 10
     params.alpha2 = 0
     params.add_cond_noise = False
-else:
-    if params.run_mode == 'normal' or params.run_mode == 'resume' or params.run_mode == 'transfer':
+else: # not speech
+    if params.run_mode == 'normal' or params.run_mode == 'resume':
         params.alpha1 = 0
         params.alpha2 = 1e-4
         params.add_cond_noise = True
-    else:
+    elif params.run_mode == 'transfer':
+        params.alpha1 = 1
+        params.alpha2 = 1e-5
+        params.add_cond_noise = True
+    else: # not resuming/transfering normal or speech training modes
         params.alpha1 = 10
         params.alpha2 = 0
         if params.run_mode == 'inpainting':
             params.add_cond_noise = True
-        else:
+        elif params.run_mode == 'denoising': # denoising 
             params.add_cond_noise = False
+        else: # unknown non speech mode
+            print('warning: unknown run_mode - there could be unexpected training behavior!')
 params.dilation_factors = [2 ** i for i in range(params.num_layers)]
+
+# make directory for new project
 if params.run_mode == 'normal' or params.run_mode == 'inpainting' or params.run_mode == 'denoising':
     # Create output folder
     if not os.path.exists('outputs'):

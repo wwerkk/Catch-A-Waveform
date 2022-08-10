@@ -121,8 +121,8 @@ def create_input_signals(params:object, input_signal:np.ndarray, Fs:int):
     set_first_scale = False
     rf = calc_receptive_field(params.filter_size, params.dilation_factors)
     if params.scale_crop == True:
-        crop_length = int(params.max_length * params.fs_list[0])
-        print('--scale_crop length:', params.max_length, '*', params.fs_list[0], '=', crop_length)
+        crop_length = int(params.max_length * params.fs_list[params.scale_crop_idx])
+        print('--scale_crop length:', params.max_length, '*', params.fs_list[params.scale_crop_idx], '=', crop_length)
     for k in range(n_scales):
         downsample = params.scales[k]
         fs = int(Fs / downsample)
@@ -249,7 +249,10 @@ def draw_signal(params:object, generators_list:list, signals_lengths_list:list, 
             edit reconstruction_noise_list.pt by removing unneeded tensors
             which might have been added in previous resume runs to the .pt file
             '''
-        assert not len(noise_amp_list) > len(generators_list)
+        if len(noise_amp_list) > len(generators_list):
+            #print('removing tail from noise amp list')
+            noise_amp_list = noise_amp_list[:len(generators_list)]
+        assert len(noise_amp_list) == len(generators_list)
         '''
         to manually fix the assert error above
         delete netDscale*.pth and netGscale*.pth for failed models from the output folder
