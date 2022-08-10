@@ -98,8 +98,9 @@ def train(params, signals_list):
                 print(f'high reconstruction loss detected: training an extra {quarter_time} epochs on the next scale')
                 extra_epochs += quarter_time
             # train next scale less
-            elif loss_vectors[-1]['v_rec_loss'][-quarter_time] - loss_vectors[-1]['v_rec_loss'][-1] < 0.001:
-                print(f'overfitting detected: reducing training by {quarter_time} epochs on the next scale.')
+            overfit_score = loss_vectors[-1]['v_rec_loss'][-quarter_time] - loss_vectors[-1]['v_rec_loss'][-1]
+            elif overfit_score < 0.001:
+                print(f'overfitting detected {overfit_score}: reducing training by {quarter_time} epochs on the next scale.')
                 extra_epochs -= quarter_time
 
 
