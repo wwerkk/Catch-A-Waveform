@@ -129,7 +129,7 @@ def create_input_signals(params:object, input_signal:np.ndarray, Fs:int):
         if downsample == 1:
             coarse_sig = input_signal
         else:
-            coarse_sig = torch.Tensor(librosa.resample(input_signal.squeeze().numpy(), Fs, fs))
+            coarse_sig = torch.Tensor(librosa.resample(input_signal.squeeze().numpy(), orig_sr=Fs, target_sr=fs))
         if params.scale_crop == True:
             print(downsample, coarse_sig.shape[-1], int((min([crop_length, coarse_sig.shape[-1]])/coarse_sig.shape[-1])*100),'%')
             #crop_length = int(coarse_sig.shape[0] / params.scales[-k-1])
@@ -227,7 +227,7 @@ def get_input_signal(params:object):
     params.Fs = Fs
     if params.init_sample_rate < Fs:
         hr_samples = samples.copy()
-        samples = librosa.resample(hr_samples, Fs, params.init_sample_rate)
+        samples = librosa.resample(hr_samples, orig_sr=Fs, target_sr=params.init_sample_rate)
         params.Fs = params.init_sample_rate
     params.norm_factor = max(abs(samples.reshape(-1)))
     samples = samples / params.norm_factor
